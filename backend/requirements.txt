@@ -7,5 +7,5 @@ networkx==3.4.2
 geopandas==1.0.1
 shapely==2.0.6
 requests==2.32.3
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 osmnx==2.0.0

@@ -4,7 +4,7 @@ pydantic==2.9.2
 sqlalchemy==2.0.35
 psycopg2-binary==2.9.9
 networkx==3.4.2
-geopandas==1.0.1
+geopandas==1.1.2
 shapely==2.0.6
 requests==2.32.3
 python-dotenv==1.0.1

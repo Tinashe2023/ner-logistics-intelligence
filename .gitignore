@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+.env.local
+
+# OS
+.DS_Store
+
+# Data (don't commit large datasets — see docs/data_audit.md for sources)
+backend/data/*.geojson
+backend/data/*.tif
+backend/data/*.csv
+!backend/data/.gitkeep

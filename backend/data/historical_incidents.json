@@ -1,0 +1,115 @@
+{
+  "_notes": "Real incidents (source: real) are compiled from local/regional news coverage — see source_url on each. Simulated incidents (source: simulated) are synthetic, invented for demo/testing richness — they use real place names along the corridor but fabricated events/dates, and must NEVER be presented as real historical fact in your report or demo narration. Always disclose which is which if asked. Coordinates throughout are approximate (town/village-level), not GPS-precise.",
+  "incidents": [
+    {
+      "location_name": "Tippi, West Kameng (Bhalukpong-Tawang road)",
+      "lat": 27.02,
+      "lon": 92.35,
+      "date_approx": "2022-08-01",
+      "type": "landslide",
+      "severity": "moderate",
+      "source": "real",
+      "description": "Heavy-rainfall-triggered landslide blocked the Bhalukpong-Tawang road for several hours; BRO cleared it same day.",
+      "source_url": "https://archive.arunachaltimes.in/index.php/2022/08/02/landslide-blocks-bpong-tawang-road-for-hours/"
+    },
+    {
+      "location_name": "Padma Hotel / Sapper Camp / Chepara, West Kameng (Dirang-Tawang road)",
+      "lat": 27.4,
+      "lon": 92.1,
+      "date_approx": "2025-08-25",
+      "type": "landslide",
+      "severity": "severe",
+      "source": "real",
+      "description": "Multiple slope failures across at least three points cut the Dirang-Tawang route; ~120m of highway blocked, two vehicles hit by falling boulders.",
+      "source_url": "https://arunachalobserver.org/2025/08/27/massive-landslide-snaps-dirang-tawang-road-link/"
+    },
+    {
+      "location_name": "Shakti village, Tawang district (Zemithang-Tawang road)",
+      "lat": 27.75,
+      "lon": 91.75,
+      "date_approx": "2026-09-03",
+      "type": "landslide",
+      "severity": "moderate",
+      "source": "real",
+      "description": "Landslide blocked the Zemithang-Tawang road near Shakti village; recurrence of a landslide at the same location noted in prior weeks.",
+      "source_url": "https://arunachalobserver.org/2026/09/04/landslides-block-zemithang-tawang-road/"
+    },
+    {
+      "location_name": "Sela Pass, Tawang district",
+      "lat": 27.5073,
+      "lon": 92.0827,
+      "date_approx": "historical/recurring (pre-2024)",
+      "type": "weather_closure",
+      "severity": "severe",
+      "source": "real",
+      "description": "Historically prone to snow/weather closures on the Bomdila-Tawang stretch, severe enough that the Sela Tunnel was built specifically to guarantee year-round access; opened March 2024.",
+      "source_url": "https://en.wikipedia.org/wiki/Sela_Tunnel"
+    },
+    {
+      "location_name": "Nechiphu Pass, West Kameng",
+      "lat": 27.24,
+      "lon": 92.4,
+      "date_approx": "2024-07-14",
+      "type": "landslide",
+      "severity": "moderate",
+      "source": "simulated",
+      "description": "Synthetic scenario: slope failure narrows the pass to single-lane traffic for several hours. Invented for demo/testing — not a reported real event.",
+      "source_url": null
+    },
+    {
+      "location_name": "Tenga Valley, West Kameng",
+      "lat": 27.15,
+      "lon": 92.47,
+      "date_approx": "2024-06-30",
+      "type": "flood",
+      "severity": "moderate",
+      "source": "simulated",
+      "description": "Synthetic scenario: stream overflow near a river crossing damages the road shoulder. Invented for demo/testing — not a reported real event.",
+      "source_url": null
+    },
+    {
+      "location_name": "Rupa, West Kameng",
+      "lat": 27.2,
+      "lon": 92.45,
+      "date_approx": "2023-08-09",
+      "type": "landslide",
+      "severity": "minor",
+      "source": "simulated",
+      "description": "Synthetic scenario: minor debris slide, cleared within an hour. Invented for demo/testing — not a reported real event.",
+      "source_url": null
+    },
+    {
+      "location_name": "Jang, Tawang district",
+      "lat": 27.53,
+      "lon": 91.87,
+      "date_approx": "2023-07-22",
+      "type": "road_damage",
+      "severity": "moderate",
+      "source": "simulated",
+      "description": "Synthetic scenario: road surface collapse after prolonged rainfall. Invented for demo/testing — not a reported real event.",
+      "source_url": null
+    },
+    {
+      "location_name": "Chariduar foothills, near Tezpur",
+      "lat": 26.85,
+      "lon": 92.75,
+      "date_approx": "2024-08-02",
+      "type": "flood",
+      "severity": "moderate",
+      "source": "simulated",
+      "description": "Synthetic scenario: flash flooding across a low-lying stretch near the foothills. Invented for demo/testing — not a reported real event.",
+      "source_url": null
+    },
+    {
+      "location_name": "Bomdila-Dirang stretch",
+      "lat": 27.31,
+      "lon": 92.32,
+      "date_approx": "2024-07-05",
+      "type": "landslide",
+      "severity": "severe",
+      "source": "simulated",
+      "description": "Synthetic scenario: major slope failure fully blocks the highway for a day. Invented for demo/testing — not a reported real event.",
+      "source_url": null
+    }
+  ]
+}

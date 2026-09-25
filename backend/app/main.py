@@ -12,6 +12,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import routes
+from app.db.database import Base, engine
+from app.models import incident  # noqa: F401 — import so the model registers with Base
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="NER Logistics Intelligence Platform",

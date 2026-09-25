@@ -17,3 +17,10 @@ backend/data/*.geojson
 backend/data/*.tif
 backend/data/*.csv
 !backend/data/.gitkeep
+
+# Local SQLite databases
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*

@@ -44,8 +44,18 @@ export default function RiskMap({ riskMapData, routeComparison }) {
           pathOptions={{ color: "#c0392b", fillColor: "#e74c3c", fillOpacity: 0.7 }}
         >
           <Popup>
-            {h.osm_name}<br />
+            <strong>{h.osm_name}</strong><br />
             Risk: {h.risk_score.toFixed(3)}
+            {h.factors && (
+              <div style={{ marginTop: "0.4rem" }}>
+                <div style={{ fontWeight: "bold", fontSize: "0.8rem" }}>Why this is risky:</div>
+                {h.factors.slice(0, 3).map((f) => (
+                  <div key={f.factor} style={{ fontSize: "0.8rem" }}>
+                    {f.label}: {f.percent}%
+                  </div>
+                ))}
+              </div>
+            )}
           </Popup>
         </CircleMarker>
       ))}

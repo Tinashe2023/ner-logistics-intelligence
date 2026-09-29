@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.graph_loader import bump_risk_near, get_coords, get_edges_raw, get_graph, nearest_node
 from app.models.incident import Incident
+from app.risk.risk_score import SegmentFeatures, explain_risk_score
 from app.routing.risk_aware_router import shortest_risk_aware_path
 
 router = APIRouter()
@@ -31,8 +32,10 @@ LOCATIONS = {
     "dirang": (27.3557, 92.2373),
 }
 
-RISK_BUMP_RADIUS_KM = 5.0
-RISK_BUMP_AMOUNT = 0.3
+RISK_BUMP_RADIUS_KM = 15.0  # widened from 5.0 — testing showed 5km rarely reaches a real branch
+                             # point, so an approved incident often changed cost without changing
+                             # the route at all. 15km matches what Experiment 2 confirmed works.
+RISK_BUMP_AMOUNT = 0.4      # raised from 0.3 to more reliably tip the routing decision
 
 
 class RouteRequest(BaseModel):
@@ -110,10 +113,21 @@ def get_risk_map():
             continue
         mid_lat = (coords[u][0] + coords[v][0]) / 2
         mid_lon = (coords[u][1] + coords[v][1]) / 2
+
+        features = SegmentFeatures(
+            rainfall_mm_24h=e.get("rainfall_mm_24h", 0.0),
+            slope_degrees=e.get("slope_degrees", 0.0),
+            historical_incident_count=e.get("historical_incident_count", 0),
+            elevation_m=e.get("elevation_m", 0.0),
+            river_proximity_m=e.get("river_proximity_m", 999999),
+            road_condition_score=e.get("road_condition_score", 0.5),
+        )
+
         hotspots.append({
             "lat": mid_lat, "lon": mid_lon,
             "risk_score": e.get("risk_score", 0.0),
             "osm_name": e.get("osm_name", "unnamed"),
+            "factors": explain_risk_score(features),
         })
 
     return {"spine": spine, "hotspots": hotspots}

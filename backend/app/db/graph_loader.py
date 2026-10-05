@@ -1,22 +1,21 @@
 """
-Loads the risk-weighted corridor graph once (cached at module level) so
-API requests don't re-parse the graphml/json on every call.
+Loads the risk-weighted corridor graph once (cached at module level).
 
-Also builds a node_id -> (lat, lon) lookup, since corridor_edges.json only
-stores node IDs, not coordinates — needed both for nearest-node lookups
-(turning a place name or GPS point into a graph node) and for returning
-line geometry to the frontend map.
+Reads node coordinates from corridor_nodes.json (a plain, lightweight
+file) rather than parsing the .graphml via osmnx — this means the
+DEPLOYED backend never needs osmnx/geopandas/rasterio/GDAL, only
+networkx + plain JSON. Those heavier packages stay as local-only
+data-prep tools (see backend/scripts/), regenerating corridor_nodes.json
+whenever the underlying graph changes.
 """
 import json
 import math
 import os
 
-import osmnx as ox
-
 from app.routing.risk_aware_router import build_graph_from_edges
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
-SUBGRAPH_PATH = os.path.join(DATA_DIR, "corridor_subgraph.graphml")
+NODES_PATH = os.path.join(DATA_DIR, "corridor_nodes.json")
 EDGES_PATH = os.path.join(DATA_DIR, "corridor_edges.json")
 
 _graph = None
@@ -34,8 +33,9 @@ def _load():
     _edges_raw = edges
     _graph = build_graph_from_edges(edges)
 
-    G_osm = ox.load_graphml(SUBGRAPH_PATH)
-    _coords = {str(n): (data["y"], data["x"]) for n, data in G_osm.nodes(data=True)}
+    with open(NODES_PATH) as f:
+        raw_coords = json.load(f)
+    _coords = {node_id: tuple(latlon) for node_id, latlon in raw_coords.items()}
 
 
 def get_graph():
@@ -74,13 +74,12 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2 * R * math.asin(math.sqrt(a))
 
 
-def bump_risk_near(lat: float, lon: float, radius_km: float = 5.0, amount: float = 0.3) -> int:
+def bump_risk_near(lat: float, lon: float, radius_km: float = 15.0, amount: float = 0.4) -> int:
     """
     Raises risk_score (capped at 1.0) on every edge within radius_km of an
     approved incident, in both the cached graph (used for routing) and the
     raw edges list (used for the risk-map API). In-memory only — resets on
-    server restart, which is fine for a demo; wire this to persist back to
-    corridor_edges.json later if you want it to survive restarts.
+    server restart/redeploy, which is fine for a demo.
 
     Returns the number of edges affected.
     """

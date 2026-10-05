@@ -1,4 +1,7 @@
-const API_BASE = "http://localhost:8000/api";
+// VITE_API_BASE_URL is set in Vercel's project settings once the backend
+// is deployed (e.g. https://your-app.onrender.com/api). Falls back to
+// localhost for local development, where it's not set.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 export async function fetchRiskMap() {
   const res = await fetch(`${API_BASE}/network/risk-map`);

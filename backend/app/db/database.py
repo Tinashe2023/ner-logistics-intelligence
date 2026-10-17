@@ -9,8 +9,12 @@ locally via SQLite's file, in production via the same Postgres instance.
 """
 import os
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+load_dotenv()  # reads backend/.env if present — no-op in production, where
+                # Render sets DATABASE_URL as a real environment variable instead
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 DEFAULT_SQLITE_PATH = os.path.join(DATA_DIR, "app.db")

@@ -22,15 +22,15 @@ $url = API_BASE_URL . "/incidents/{$id}/{$action}";
 $ch = curl_init($url);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+curl_setopt($ch, CURLOPT_TIMEOUT, 60); // free-tier backend may be waking from sleep
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curlError = curl_error($ch);
 curl_close($ch);
 
-session_start();
+// Session is already active from require_login() — no second session_start().
 if ($curlError) {
-    $_SESSION['flash'] = "Could not reach the backend API: {$curlError}. Is FastAPI running on " . API_BASE_URL . "?";
+    $_SESSION['flash'] = "Could not reach the backend API: {$curlError}. Is it running at " . API_BASE_URL . "?";
 } elseif ($httpCode >= 200 && $httpCode < 300) {
     $data = json_decode($response, true);
     if ($action === 'approve') {
@@ -40,7 +40,7 @@ if ($curlError) {
         $_SESSION['flash'] = "Incident #{$id} rejected.";
     }
 } else {
-    $_SESSION['flash'] = "Backend returned an error (HTTP {$httpCode}): " . htmlspecialchars($response);
+    $_SESSION['flash'] = "Backend returned an error (HTTP {$httpCode}): " . $response;
 }
 
 header('Location: incidents.php');

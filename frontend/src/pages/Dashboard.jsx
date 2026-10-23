@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import RiskMap from "../components/RiskMap";
 import { fetchCorridorWeather, fetchIncidents, fetchRiskMap, fetchRoute } from "../api";
 import { getSavedLanguage, incidentStatusText, incidentTypeText, saveLanguage, t } from "../i18n";
@@ -121,7 +122,7 @@ export default function Dashboard() {
         </div>
         <div className="header-meta">
           <div className="corridor-label"><span className="live-dot" /> Prototype environment <span className="meta-divider">|</span> NER corridor demo</div>
-          <a className="header-link" href="/driver">Open field reporting <span aria-hidden="true">↗</span></a>
+          <Link className="header-link" to="/driver">Open field reporting <span aria-hidden="true">↗</span></Link>
         </div>
       </header>
 
@@ -214,7 +215,7 @@ export default function Dashboard() {
         </article>
         <article className="panel lower-panel next-panel">
           <div className="panel-heading"><div><div className="eyebrow">OPERATIONS QUEUE</div><h2>Next actions</h2></div><span className="panel-icon">↗</span></div>
-          <div className="action-list"><a href="/driver" className="action-row"><span className="action-number">01</span><span><strong>Submit a field report</strong><small>Share a road condition update</small></span><b>→</b></a><a href="http://localhost:8080/incidents.php" className="action-row"><span className="action-number">02</span><span><strong>Review pending reports</strong><small>Open dispatcher review panel</small></span><b>↗</b></a></div>
+          <div className="action-list"><Link to="/driver" className="action-row"><span className="action-number">01</span><span><strong>Submit a field report</strong><small>Share a road condition update</small></span><b>→</b></Link><a href="https://ner-logistics-intelligence-1.onrender.com/incidents.php" className="action-row"><span className="action-number">02</span><span><strong>Review pending reports</strong><small>Open dispatcher review panel</small></span><b>↗</b></a></div>
           <p className="fine-print">Dashboard-only demo alerts; no SMS/push notifications or delivery tracking.</p>
         </article>
       </section>

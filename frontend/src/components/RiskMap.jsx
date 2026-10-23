@@ -7,7 +7,7 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-const cartoApiKey = import.meta.env.MAP_CARTO_API_KEY;
+const cartoApiKey = import.meta.env.VITE_CARTO_API_KEY;
 const cartoTileUrl = `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png${cartoApiKey ? `?key=${encodeURIComponent(cartoApiKey)}` : ""}`;
 
 function riskColor(risk) {

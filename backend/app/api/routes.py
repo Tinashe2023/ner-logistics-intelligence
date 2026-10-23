@@ -12,6 +12,7 @@ call approve/reject directly through this API instead of writing to the
 DB itself, whichever ends up cleaner once that panel exists.
 """
 import hashlib
+import logging
 import networkx as nx
 import requests
 import time
@@ -30,6 +31,7 @@ from app.routing.risk_aware_router import shortest_risk_aware_path
 from app.storage.b2 import create_download_url, delete_object, is_configured, upload_object
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 LOCATIONS = {
     "guwahati": (26.1445, 91.7362),
@@ -350,6 +352,7 @@ async def upload_incident_photo(
     try:
         await run_in_threadpool(upload_object, object_key, content, declared_type)
     except Exception as exc:
+        logger.exception("Backblaze photo upload failed (incident_id=%s)", incident_id)
         raise HTTPException(status_code=503, detail="Photo storage is temporarily unavailable") from exc
 
     row = IncidentPhoto(

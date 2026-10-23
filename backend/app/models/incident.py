@@ -7,7 +7,7 @@ report shouldn't silently change routing decisions.
 """
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, Integer, String
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
 
 from app.db.database import Base
 
@@ -24,3 +24,26 @@ class Incident(Base):
     status = Column(String, default="pending")      # pending, approved, rejected
     reported_at = Column(DateTime, default=datetime.utcnow)
     reviewed_at = Column(DateTime, nullable=True)
+
+
+class IncidentSubmission(Base):
+    """Maps a client-generated report ID to its single persisted incident."""
+
+    __tablename__ = "incident_submissions"
+
+    idempotency_key = Column(String(128), primary_key=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id"), nullable=False, unique=True)
+    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class IncidentPhoto(Base):
+    """Private B2 object metadata for a field-report photograph."""
+
+    __tablename__ = "incident_photos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id"), nullable=False, index=True)
+    client_photo_id = Column(String(128), nullable=False, unique=True, index=True)
+    object_key = Column(String(512), nullable=False, unique=True)
+    content_type = Column(String(64), nullable=False)
+    uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)

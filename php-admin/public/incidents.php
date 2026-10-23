@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_login();
 
@@ -17,6 +18,15 @@ if ($statusFilter === 'all') {
     $stmt->execute(['status' => $statusFilter]);
 }
 $incidents = $stmt->fetchAll();
+$photosByIncident = [];
+if ($incidents) {
+    $incidentIds = array_map(static fn($incident) => (int)$incident['id'], $incidents);
+    $idList = implode(',', $incidentIds);
+    $photoRows = $db->query("SELECT id, incident_id FROM incident_photos WHERE incident_id IN ({$idList}) ORDER BY id")->fetchAll();
+    foreach ($photoRows as $photo) {
+        $photosByIncident[(int)$photo['incident_id']][] = (int)$photo['id'];
+    }
+}
 
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
@@ -68,7 +78,7 @@ unset($_SESSION['flash']);
             <thead>
                 <tr>
                     <th>ID</th><th>Type</th><th>Severity</th><th>Location</th>
-                    <th>Description</th><th>Reported</th><th>Status</th><th>Action</th>
+                    <th>Description</th><th>Photos</th><th>Reported</th><th>Status</th><th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -79,6 +89,12 @@ unset($_SESSION['flash']);
                     <td><?= htmlspecialchars($inc['severity']) ?></td>
                     <td><?= number_format((float)$inc['lat'], 4) ?>, <?= number_format((float)$inc['lon'], 4) ?></td>
                     <td><?= htmlspecialchars($inc['description'] ?? '') ?></td>
+                    <td>
+                        <?php foreach ($photosByIncident[(int)$inc['id']] ?? [] as $photoId): ?>
+                            <a href="<?= htmlspecialchars(API_BASE_URL . '/incidents/' . (int)$inc['id'] . '/photos/' . $photoId . '/download', ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">View photo</a><br>
+                        <?php endforeach; ?>
+                        <?php if (empty($photosByIncident[(int)$inc['id']])): ?>—<?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($inc['reported_at']) ?></td>
                     <td><span class="badge badge-<?= htmlspecialchars($inc['status']) ?>"><?= htmlspecialchars($inc['status']) ?></span></td>
                     <td>
@@ -100,7 +116,7 @@ unset($_SESSION['flash']);
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($incidents)): ?>
-                <tr><td colspan="8" style="text-align:center; color:#888;">No incidents in this view.</td></tr>
+                <tr><td colspan="9" style="text-align:center; color:#888;">No incidents in this view.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

@@ -37,6 +37,25 @@ def _load():
         raw_coords = json.load(f)
     _coords = {node_id: tuple(latlon) for node_id, latlon in raw_coords.items()}
 
+    # Rebuild the prototype risk overlay from approved incidents whenever the
+    # baseline graph is loaded. The database is the source of truth; the graph
+    # is a cache derived from baseline edges plus reviewed incident records.
+    from app.db.database import SessionLocal
+    from app.models.incident import Incident
+
+    db = SessionLocal()
+    try:
+        approved = (
+            db.query(Incident)
+            .filter(Incident.status == "approved")
+            .order_by(Incident.id.asc())
+            .all()
+        )
+        for incident in approved:
+            _apply_risk_bump(incident.lat, incident.lon, 15.0, 0.4)
+    finally:
+        db.close()
+
 
 def get_graph():
     _load()
@@ -78,14 +97,20 @@ def bump_risk_near(lat: float, lon: float, radius_km: float = 15.0, amount: floa
     """
     Raises risk_score (capped at 1.0) on every edge within radius_km of an
     approved incident, in both the cached graph (used for routing) and the
-    raw edges list (used for the risk-map API). In-memory only — resets on
-    server restart/redeploy, which is fine for a demo.
+    raw edges list (used for the risk-map API). The overlay is cached in
+    memory and replayed from approved database records when the graph loads.
 
     Returns the number of edges affected.
     """
-    graph = get_graph()
-    edges_raw = get_edges_raw()
-    coords = get_coords()
+    _load()
+    return _apply_risk_bump(lat, lon, radius_km, amount)
+
+
+def _apply_risk_bump(lat: float, lon: float, radius_km: float, amount: float) -> int:
+    """Apply one approved-incident overlay to the loaded graph."""
+    graph = _graph
+    edges_raw = _edges_raw
+    coords = _coords
 
     affected = 0
     for e in edges_raw:

@@ -19,7 +19,7 @@ define('DB_SSLMODE', getenv('DB_SSLMODE') ?: 'require');
 
 // Which FastAPI backend to control — point this at the deployed Render
 // URL for the deployed PHP instance, or localhost for local testing.
-define('API_BASE_URL', getenv('API_BASE_URL') ?: 'http://localhost:8000/api');
+define('API_BASE_URL', getenv('API_BASE_URL') ?: 'https://ner-logistics-intelligence-akhd.onrender.com/api');
 
 // Demo-only credentials. CHANGE THESE via environment variables for the
 // deployed instance — leaving defaults on a public URL is bad practice,

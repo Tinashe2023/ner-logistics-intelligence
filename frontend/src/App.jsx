@@ -11,8 +11,8 @@ function Nav() {
     fontWeight: location.pathname === path ? "bold" : "normal",
   });
   return (
-    <header style={{ padding: "1rem", background: "#0f0f1e", color: "white", display: "flex", alignItems: "center" }}>
-      <h1 style={{ margin: 0, fontSize: "1.3rem", marginRight: "2rem" }}>NER Logistics Intelligence</h1>
+    <header className="app-nav">
+      <h1>NER Logistics</h1>
       <Link to="/" style={linkStyle("/")}>Command Center</Link>
       <Link to="/driver" style={linkStyle("/driver")}>Driver View</Link>
     </header>
@@ -22,11 +22,10 @@ function Nav() {
 export default function App() {
   return (
     <BrowserRouter>
-      <div style={{ fontFamily: "sans-serif" }}>
-        <Nav />
+      <div className="app-root">
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/driver" element={<DriverView />} />
+          <Route path="/driver" element={<><Nav /><DriverView /></>} />
         </Routes>
       </div>
     </BrowserRouter>

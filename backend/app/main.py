@@ -8,6 +8,8 @@ This is intentionally minimal in week 1. The goal is to have something
 running end-to-end (even with fake data) as early as possible, rather
 than building out the full schema before anything works.
 """
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,10 +25,19 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Allow the React dev server (and later, the deployed frontend) to call this API.
+# Set FRONTEND_ORIGINS on the host to a comma-separated list when deploying.
+# Keep localhost available for local development and allow the known Vercel UI.
+frontend_origins = {
+    origin.strip()
+    for origin in os.getenv(
+        "FRONTEND_ORIGINS",
+        "http://localhost:5173,https://ner-logistics-intelligence-nine.vercel.app",
+    ).split(",")
+    if origin.strip()
+}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this before deployment
+    allow_origins=sorted(frontend_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )

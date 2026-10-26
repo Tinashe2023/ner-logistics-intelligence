@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import AIAnalyst from "../components/AIAnalyst";
 import RiskMap from "../components/RiskMap";
+import { DEMO_SHIPMENTS, DEMO_SITUATIONS } from "../data/regionalDemo";
 import { fetchCorridorWeather, fetchIncidents, fetchRiskMap, fetchRoute } from "../api";
 import { getSavedLanguage, incidentStatusText, incidentTypeText, saveLanguage, t } from "../i18n";
 import "../styles/dashboard.css";
@@ -22,6 +24,7 @@ export default function Dashboard() {
   const [destination, setDestination] = useState("tawang");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [regionalMode, setRegionalMode] = useState(true);
 
   useEffect(() => {
     fetchRiskMap().then(setRiskMapData).catch((err) => setError(err.message));
@@ -99,6 +102,7 @@ export default function Dashboard() {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setRegionalMode(false);
     try {
       setRouteComparison(await fetchRoute(origin, destination));
     } catch (err) {
@@ -121,20 +125,21 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="header-meta">
-          <div className="corridor-label"><span className="live-dot" /> Prototype environment <span className="meta-divider">|</span> NER corridor demo</div>
+          <div className="corridor-label"><span className="live-dot" /> Prototype environment <span className="meta-divider">|</span> {regionalMode ? "NER regional simulation" : "Guwahati–Tawang corridor demo"}</div>
+          <Link className="header-link" to="/">Platform home <span aria-hidden="true">↗</span></Link>
           <Link className="header-link" to="/driver">Open field reporting <span aria-hidden="true">↗</span></Link>
         </div>
       </header>
 
-      <div className="demo-notice"><span className="notice-icon">i</span><span><strong>Demonstration data</strong> · Vehicle position is simulated. Weather is forecast-model context at four fixed points; corridor risk uses a prototype heuristic and does not include weather.</span></div>
+      <div className="demo-notice"><span className="notice-icon">i</span><span><strong>Class demonstration</strong> · Regional links, situations, and shipment traces illustrate the intended workflow. Corridor weather is forecast-model context at four fixed points; it is not included in corridor risk scores.</span></div>
 
       {error && <div className="error-banner" role="alert">{error}</div>}
 
-      <section className="metric-grid" aria-label="Corridor summary">
-        <MetricCard label="Monitored corridor" value="410" unit="km" detail="Guwahati — Tawang" icon="↗" tone="blue" />
-        <MetricCard label="Elevated risk segments" value={riskMapData ? String(highRiskCount).padStart(2, "0") : "—"} unit="" detail="From top mapped hotspots" icon="△" tone="amber" />
+      <section className="metric-grid" aria-label={regionalMode ? "Regional demonstration summary" : "Corridor summary"}>
+        <MetricCard label={regionalMode ? "States represented" : "Monitored corridor"} value={regionalMode ? "08" : "410"} unit={regionalMode ? "" : "km"} detail={regionalMode ? "Illustrative hubs · all NER states" : "Guwahati — Tawang"} icon="↗" tone="blue" />
+        <MetricCard label={regionalMode ? "Scenario situations" : "Elevated risk segments"} value={regionalMode ? String(DEMO_SITUATIONS.length).padStart(2, "0") : riskMapData ? String(highRiskCount).padStart(2, "0") : "—"} unit="" detail={regionalMode ? "Synthetic · one per state" : "From top mapped hotspots"} icon="△" tone="amber" />
         <MetricCard label="Reports awaiting review" value={String(pendingCount).padStart(2, "0")} unit="" detail="Field submissions" icon="◷" tone="violet" />
-        <MetricCard label="Vehicle tracking" value="01" unit="" detail="Simulated marker · no GPS feed" icon="⌖" tone="muted" />
+        <MetricCard label={regionalMode ? "Demo shipments" : "Vehicle tracking"} value={regionalMode ? String(DEMO_SHIPMENTS.length).padStart(2, "0") : "01"} unit="" detail="Demo movement · no GPS feed" icon="⌖" tone="muted" />
       </section>
 
       <section className="panel weather-panel" aria-label="Corridor weather">
@@ -158,14 +163,18 @@ export default function Dashboard() {
       <section className="main-grid">
         <article className="panel map-panel">
           <div className="panel-heading map-heading">
-            <div><div className="eyebrow">NETWORK OVERVIEW</div><h2>Corridor accessibility</h2></div>
-            <div className="map-status"><span className="status-dot" /> Static network data</div>
+            <div><div className="eyebrow">NETWORK OVERVIEW</div><h2>{regionalMode ? "North Eastern regional scenario" : "Corridor accessibility"}</h2></div>
+            <div className="map-status"><span className="status-dot" /> {regionalMode ? "REGIONAL DEMO LAYER" : "Static corridor data"}</div>
+          </div>
+          <div className="regional-map-controls" role="group" aria-label="Map view">
+            <button type="button" className={regionalMode ? "active" : ""} onClick={() => setRegionalMode(true)}>Regional scenario</button>
+            <button type="button" className={!regionalMode ? "active" : ""} onClick={() => setRegionalMode(false)}>Guwahati–Tawang corridor</button>
           </div>
           <div className="map-frame">
-            {riskMapData ? <RiskMap riskMapData={riskMapData} routeComparison={routeComparison} simulatedVehicle={simulatedVehicle} /> : <div className="map-loading">Loading corridor map…</div>}
-            <div className="map-caption"><span className="legend-line legend-risk" /> Risk-aware route <span className="legend-line legend-base" /> Distance baseline <span className="legend-pin" /> Risk hotspot <span className="vehicle-legend" /> Simulated vehicle</div>
+            {regionalMode || riskMapData ? <RiskMap riskMapData={riskMapData} routeComparison={routeComparison} simulatedVehicle={simulatedVehicle} regionalMode={regionalMode} simulationClock={simulationClock} /> : <div className="map-loading">Loading corridor map…</div>}
+            <div className="map-caption">{regionalMode ? <><span className="legend-line legend-base" /> Illustrative links <span className="legend-pin" /> Scenario <span className="vehicle-legend" /> Shipment trace</> : <><span className="legend-line legend-risk" /> Risk-aware route <span className="legend-line legend-base" /> Distance baseline <span className="legend-pin" /> Risk hotspot <span className="vehicle-legend" /> Demo vehicle</>}</div>
           </div>
-          <div className="map-footer"><span>Guwahati → Tawang corridor</span><span>Map data: OpenStreetMap · <span className="muted">availability is not live-verified</span></span></div>
+          <div className="map-footer"><span>{regionalMode ? "Eight-state overview · schematic connectors are not road routes" : "Guwahati → Tawang corridor"}</span><span>{regionalMode ? "Synthetic demonstration layer · hubs use city-center coordinates" : <>Map data: OpenStreetMap · <span className="muted">availability is not live-verified</span></>}</span></div>
         </article>
 
         <aside className="side-stack">
@@ -177,6 +186,7 @@ export default function Dashboard() {
               <label>Destination<select value={destination} onChange={(event) => setDestination(event.target.value)}>{LOCATIONS.map((place) => <option key={place} value={place}>{titleCase(place)}</option>)}</select></label>
               <button className="primary-button" type="submit" disabled={loading || origin === destination}>{loading ? "Calculating route…" : "Calculate route comparison"}<span aria-hidden="true">→</span></button>
             </form>
+            <p className="panel-hint">Route calculations use the Guwahati–Tawang corridor graph only; regional connectors are illustrative.</p>
             {routeStats ? <div className="route-result">
               <div className="result-title"><span className="result-dot" /> Risk-aware option <span className="prototype-tag">HEURISTIC</span></div>
               <div className="result-metrics"><div><strong>{routeStats.distance_km}</strong><span>km</span></div><div><strong>{Math.round(routeStats.travel_time_min / 60)}h {Math.round(routeStats.travel_time_min % 60)}m</strong><span>estimated</span></div><div><strong>{routeStats.total_risk_exposure}</strong><span>risk exposure</span></div></div>
@@ -202,6 +212,8 @@ export default function Dashboard() {
         </aside>
       </section>
 
+      <AIAnalyst />
+
       <section className="lower-grid">
         <article className="panel lower-panel">
           <div className="panel-heading"><div><div className="eyebrow">RISK MODEL · PROTOTYPE</div><h2>Factors behind mapped risk</h2></div><span className="panel-icon">⌁</span></div>
@@ -209,9 +221,8 @@ export default function Dashboard() {
           <p className="fine-print">These are weighted heuristic contributions, not measured probabilities or validated predictions.</p>
         </article>
         <article className="panel lower-panel fleet-panel">
-          <div className="panel-heading"><div><div className="eyebrow">MOVEMENT VISIBILITY</div><h2>Vehicle status</h2></div><span className="unavailable-chip">SIMULATED</span></div>
-          <div className="fleet-empty"><div className="fleet-icon">⌖</div><div><strong>TRK-DEMO-01 · In transit</strong><span>Demo cargo: medical supplies · follows the selected corridor route.</span></div></div>
-          <div className="fleet-summary"><span>Route progress · demo only</span><strong>{simulatedVehicle ? `${simulatedVehicle.progress}%` : "Waiting for route data"}</strong></div>
+          <div className="panel-heading"><div><div className="eyebrow">MOVEMENT VISIBILITY</div><h2>Vehicle status</h2></div><span className="unavailable-chip">CLASS DEMO</span></div>
+          {regionalMode ? <div className="regional-shipment-list">{DEMO_SHIPMENTS.map((shipment) => <div key={shipment.id}><span className="vehicle-legend" /><strong>{shipment.id}</strong><span>{shipment.cargo}</span><em>IN TRANSIT</em></div>)}</div> : <><div className="fleet-empty"><div className="fleet-icon">⌖</div><div><strong>TRK-DEMO-01 · In transit</strong><span>Demo cargo: medical supplies · follows the selected corridor route.</span></div></div><div className="fleet-summary"><span>Route progress · demo only</span><strong>{simulatedVehicle ? `${simulatedVehicle.progress}%` : "Waiting for route data"}</strong></div></>}
         </article>
         <article className="panel lower-panel next-panel">
           <div className="panel-heading"><div><div className="eyebrow">OPERATIONS QUEUE</div><h2>Next actions</h2></div><span className="panel-icon">↗</span></div>

@@ -16,7 +16,9 @@ import logging
 import networkx as nx
 import requests
 import time
+from collections import defaultdict, deque
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import Request
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,6 +26,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse
 
 from app.db.database import get_db
+from app.ai import logistics_analyst
 from app.db.graph_loader import bump_risk_near, get_coords, get_edges_raw, get_graph, nearest_node
 from app.models.incident import Incident, IncidentPhoto, IncidentSubmission
 from app.risk.risk_score import SegmentFeatures, explain_risk_score
@@ -60,6 +63,22 @@ _weather_cache_time = 0.0
 class RouteRequest(BaseModel):
     origin: str
     destination: str
+
+
+class AIHistoryMessage(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(max_length=1200)
+
+
+class AIChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=1200)
+    history: list[AIHistoryMessage] = Field(default_factory=list, max_length=8)
+
+
+_ai_requests_by_client = defaultdict(deque)
+AI_CHAT_REQUESTS_PER_MINUTE = 8
+AI_CHAT_REQUESTS_PER_DAY = 40
+_ai_daily_usage = {"day": int(time.time() // 86400), "count": 0}
 
 
 class IncidentCreate(BaseModel):
@@ -435,3 +454,51 @@ def reject_incident(incident_id: int, db: Session = Depends(get_db)):
 def get_vehicles():
     """Current vehicle positions for the command center map. Placeholder until Phase 4."""
     return {"vehicles": []}
+
+
+@router.get("/ai/status")
+def get_ai_status():
+    return {
+        "configured": logistics_analyst.is_configured(),
+        "provider": logistics_analyst.configured_provider(),
+        "model": logistics_analyst.configured_model(),
+        "context": "Read-only corridor graph, historical incident JSON, and field-report database",
+    }
+
+
+@router.post("/ai/chat")
+def chat_with_logistics_analyst(
+    body: AIChatRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    if not body.message.strip():
+        raise HTTPException(status_code=422, detail="Enter a question for the AI analyst.")
+    if not logistics_analyst.is_configured():
+        raise HTTPException(status_code=503, detail="AI analyst is not configured on the backend.")
+
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    requests_for_client = _ai_requests_by_client[client]
+    while requests_for_client and now - requests_for_client[0] >= 60:
+        requests_for_client.popleft()
+    if len(requests_for_client) >= AI_CHAT_REQUESTS_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="AI demo limit reached; wait a minute and try again.")
+
+    day = int(time.time() // 86400)
+    if day != _ai_daily_usage["day"]:
+        _ai_daily_usage.update(day=day, count=0)
+    if _ai_daily_usage["count"] >= AI_CHAT_REQUESTS_PER_DAY:
+        raise HTTPException(status_code=429, detail="The class-demo AI daily request limit has been reached.")
+    requests_for_client.append(now)
+    _ai_daily_usage["count"] += 1
+    try:
+        return logistics_analyst.answer_question(body.message.strip(), body.history, db)
+    except requests.Timeout as exc:
+        raise HTTPException(status_code=504, detail="AI analyst timed out. Try again.") from exc
+    except (requests.RequestException, RuntimeError) as exc:
+        logger.warning("AI logistics analyst request failed: %s", exc)
+        message = str(exc) if str(exc).startswith(("Gemini API returned HTTP ", "Groq API returned HTTP ")) else "AI analyst could not complete the request. Check the backend log for provider details."
+        if str(exc).startswith("Both AI providers failed."):
+            message = "Both Gemini and Groq requests failed. Check the backend log for provider details."
+        raise HTTPException(status_code=502, detail=message) from exc

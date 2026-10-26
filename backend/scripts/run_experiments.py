@@ -20,13 +20,12 @@ import os
 import sys
 
 import networkx as nx
-import osmnx as ox
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.routing.risk_aware_router import build_graph_from_edges  # noqa: E402
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
-SUBGRAPH_PATH = os.path.join(DATA_DIR, "corridor_subgraph.graphml")
+NODES_PATH = os.path.join(DATA_DIR, "corridor_nodes.json")
 EDGES_PATH = os.path.join(DATA_DIR, "corridor_edges.json")
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "experiments", "results_summary.md")
 
@@ -47,8 +46,9 @@ ROUTE_PAIRS = [
 
 
 def load_coords():
-    G = ox.load_graphml(SUBGRAPH_PATH)
-    return {str(n): (data["y"], data["x"]) for n, data in G.nodes(data=True)}
+    with open(NODES_PATH) as f:
+        raw_coords = json.load(f)
+    return {str(node): tuple(latlon) for node, latlon in raw_coords.items()}
 
 
 def nearest_node(coords, lat, lon):
@@ -106,8 +106,8 @@ def simulate_heavy_rainfall_uniform(edges):
 
 def simulate_localized_storm(edges, coords, center_lat, center_lon, radius_km=15.0):
     """
-    Bumps rainfall only within radius_km of a specific point (e.g. Sela
-    Pass) — a localized storm, which actually changes an edge's risk
+    Bumps rainfall only within radius_km of a specific point — a localized
+    perturbation that changes an edge's risk
     RELATIVE to its neighbors and so is far more likely to trigger a real
     reroute than a uniform corridor-wide bump.
     """
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     )
 
     print("\n" + "=" * 70)
-    print("EXPERIMENT 2: Localized storm near Sela Pass (Guwahati -> Tawang, risk-aware route)")
+    print("EXPERIMENT 2: Localized rainfall perturbation near the Guwahati-side branch (Guwahati -> Tawang, risk-aware route)")
     print("=" * 70)
 
     orig_node = nearest_node(coords, *LOCATIONS["guwahati"])
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     normal_path = nx.dijkstra_path(G, orig_node, dest_node, weight="weight")
     normal_stats = path_stats(G, normal_path)
 
-    STORM_LOCATION = (26.3871, 91.7336)  # confirmed branch point — triggers a real reroute
+    STORM_LOCATION = (26.3871, 91.7336)  # Guwahati-side branch point; not Sela Pass
     storm_edges, affected = simulate_localized_storm(edges, coords, *STORM_LOCATION, radius_km=15.0)
     G_storm = build_graph_from_edges(storm_edges)
     storm_path = nx.dijkstra_path(G_storm, orig_node, dest_node, weight="weight")
@@ -206,28 +206,28 @@ if __name__ == "__main__":
     route_changed = normal_path != storm_path
     overlap = len(set(normal_path) & set(storm_path)) / len(set(normal_path)) * 100
 
-    print(f"Storm affected {affected} edges within 15km of Sela Pass")
+    print(f"Rainfall perturbation affected {affected} edges within 15km of its simulated center")
     print(f"Normal conditions:  dist={normal_stats['distance_km']}km  "
           f"time={normal_stats['travel_time_min']}min  risk={normal_stats['risk_exposure']}")
-    print(f"Localized storm:    dist={storm_stats['distance_km']}km  "
+    print(f"Localized perturbation: dist={storm_stats['distance_km']}km  "
           f"time={storm_stats['travel_time_min']}min  risk={storm_stats['risk_exposure']}")
     print(f"Route actually changed: {route_changed} (node overlap with original path: {overlap:.1f}%)")
 
     table2 = format_markdown_table(
         [
             ["Normal conditions", normal_stats["distance_km"], normal_stats["travel_time_min"], normal_stats["risk_exposure"]],
-            ["Localized storm (Sela Pass, 15km radius)", storm_stats["distance_km"], storm_stats["travel_time_min"], storm_stats["risk_exposure"]],
+            ["Localized rainfall perturbation (15km radius)", storm_stats["distance_km"], storm_stats["travel_time_min"], storm_stats["risk_exposure"]],
         ],
         ["Scenario", "Distance (km)", "Time (min)", "Risk Exposure"],
     )
-    table2 += f"\n\nRoute changed: **{route_changed}** ({affected} edges affected by the storm, {overlap:.1f}% node overlap with the original path)"
+    table2 += f"\n\nRoute changed: **{route_changed}** ({affected} edges affected, {overlap:.1f}% node overlap with the original path)"
 
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     with open(OUTPUT_PATH, "w") as f:
         f.write("# Experiment Results\n\n")
         f.write("## Experiment 1: Strategy comparison\n\n")
         f.write(table1 + "\n\n")
-        f.write("## Experiment 2: Localized storm near Sela Pass (Guwahati -> Tawang, risk-aware route)\n\n")
+        f.write("## Experiment 2: Localized rainfall perturbation near the Guwahati-side branch (Guwahati -> Tawang, risk-aware route)\n\n")
         f.write(table2 + "\n")
 
     print(f"\nSaved results table to {OUTPUT_PATH}")

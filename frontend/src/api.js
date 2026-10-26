@@ -57,6 +57,25 @@ export async function fetchRoute(origin, destination) {
   return res.json();
 }
 
+export async function fetchAIStatus() {
+  const res = await fetch(`${API_BASE}/ai/status`);
+  if (!res.ok) throw new Error("AI analyst status is unavailable");
+  return res.json();
+}
+
+export async function askAIAnalyst(message, history = []) {
+  const res = await fetchWithTimeout(`${API_BASE}/ai/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, history }),
+  }, 60000);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "AI analyst request failed");
+  }
+  return res.json();
+}
+
 export async function reportIncident({ localId, lat, lon, type, severity, description }) {
   const res = await fetchWithTimeout(`${API_BASE}/incidents`, {
     method: "POST",

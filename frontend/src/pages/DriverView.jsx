@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { CircleMarker, MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { checkApiHealth, fetchRoute, reportIncident, uploadIncidentPhoto } from "../api";
@@ -9,6 +10,14 @@ import { readQueuedReports, replaceQueuedReports } from "../offlineQueue";
 // real GPS input would replace this in a native app, but for a web
 // demo, picking a known spot is faster than typing coordinates.
 const QUICK_LOCATIONS = {
+  "Guwahati (Assam)": { lat: 26.1445, lon: 91.7362 },
+  "Itanagar (Arunachal Pradesh)": { lat: 27.0844, lon: 93.6053 },
+  "Shillong (Meghalaya)": { lat: 25.5788, lon: 91.8933 },
+  "Imphal (Manipur)": { lat: 24.8170, lon: 93.9368 },
+  "Aizawl (Mizoram)": { lat: 23.7271, lon: 92.7176 },
+  "Kohima (Nagaland)": { lat: 25.6751, lon: 94.1086 },
+  "Agartala (Tripura)": { lat: 23.8315, lon: 91.2868 },
+  "Gangtok (Sikkim)": { lat: 27.3389, lon: 88.6065 },
   "Near Guwahati": { lat: 26.3871, lon: 91.7336 },
   "Tenga Valley": { lat: 27.15, lon: 92.47 },
   "Nechiphu Pass": { lat: 27.24, lon: 92.4 },
@@ -22,6 +31,8 @@ function makeLocalId() {
 }
 
 export default function DriverView() {
+  const location = useLocation();
+  const signedInDriverId = location.state?.driverId;
   const [route, setRoute] = useState(null);
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const [apiAvailable, setApiAvailable] = useState(null);
@@ -218,7 +229,7 @@ export default function DriverView() {
   return (
     <main className="driver-view-shell" lang={language === "hi" ? "hi" : "en"}>
       <div className="driver-title-row">
-        <div><div className="eyebrow">FIELD OPERATIONS</div><h2>{t(language, "driverTitle")}</h2><p>{t(language, "driverSubtitle")}</p></div>
+        <div><div className="eyebrow">FIELD OPERATIONS</div><h2>{t(language, "driverTitle")}</h2><p>{t(language, "driverSubtitle")}{signedInDriverId ? ` · ${signedInDriverId}` : ""}</p></div>
         <button type="button" className="language-toggle" aria-label={t(language, "language")} aria-pressed={language === "hi"} onClick={() => setLanguage(saveLanguage(language === "en" ? "hi" : "en"))}>{language === "en" ? "हिन्दी" : "English"}</button>
       </div>
       <div className={`driver-connectivity ${isOffline || !navigator.onLine ? "is-offline" : "is-online"}`}>
@@ -279,7 +290,7 @@ export default function DriverView() {
 
         <label>{t(language, "pinLocation")} <span style={{ color: "#718399", fontWeight: "normal" }}>{t(language, "tapMap")}</span></label>
         <div className="report-map-wrap">
-          <MapContainer center={[27.15, 92.15]} zoom={7} scrollWheelZoom={false} className="report-location-map">
+          <MapContainer key={form.location} center={[coordinates.lat, coordinates.lon]} zoom={7} scrollWheelZoom={false} className="report-location-map">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

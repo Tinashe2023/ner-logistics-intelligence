@@ -76,20 +76,56 @@ export async function askAIAnalyst(message, history = []) {
   return res.json();
 }
 
-export async function reportIncident({ localId, lat, lon, type, severity, description }) {
+export async function reportIncident({
+  localId,
+  lat,
+  lon,
+  type,
+  severity,
+  description,
+  vehicle_id,
+  driver_id,
+  vehicle_progress,
+}) {
   const res = await fetchWithTimeout(`${API_BASE}/incidents`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(localId ? { "Idempotency-Key": localId } : {}),
     },
-    body: JSON.stringify({ lat, lon, type, severity, description }),
+    body: JSON.stringify({
+      lat,
+      lon,
+      type,
+      severity,
+      description,
+      vehicle_id,
+      driver_id,
+      vehicle_progress,
+    }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "Failed to report incident");
   }
   return res.json();
+}
+
+async function postIncidentAction(incidentId, action) {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}/${action}`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to ${action.replace("-", " ")} for field report`);
+  }
+  return res.json();
+}
+
+export async function alertRoadTeam(incidentId) {
+  return postIncidentAction(incidentId, "alert-team");
+}
+
+export async function completeRoadClearance(incidentId) {
+  return postIncidentAction(incidentId, "team-cleared");
 }
 
 export async function uploadIncidentPhoto(incidentId, photo) {

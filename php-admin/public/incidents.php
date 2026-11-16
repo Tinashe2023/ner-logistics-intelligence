@@ -12,9 +12,9 @@ if (!in_array($statusFilter, $allowedStatuses, true)) {
 }
 
 if ($statusFilter === 'all') {
-    $stmt = $db->query('SELECT * FROM incidents ORDER BY reported_at DESC');
+    $stmt = $db->query("SELECT i.id, i.lat, i.lon, i.type, i.severity, i.description, i.status, i.reported_at, i.vehicle_id, i.driver_id, i.team_alerted_at, i.road_cleared_at, v.cargo FROM incidents i LEFT JOIN demo_vehicles v ON v.id = i.vehicle_id ORDER BY i.reported_at DESC");
 } else {
-    $stmt = $db->prepare('SELECT * FROM incidents WHERE status = :status ORDER BY reported_at DESC');
+    $stmt = $db->prepare("SELECT i.id, i.lat, i.lon, i.type, i.severity, i.description, i.status, i.reported_at, i.vehicle_id, i.driver_id, i.team_alerted_at, i.road_cleared_at, v.cargo FROM incidents i LEFT JOIN demo_vehicles v ON v.id = i.vehicle_id WHERE i.status = :status ORDER BY i.reported_at DESC");
     $stmt->execute(['status' => $statusFilter]);
 }
 $incidents = $stmt->fetchAll();
@@ -52,7 +52,9 @@ unset($_SESSION['flash']);
         .filters a.active { font-weight: bold; text-decoration: underline; }
         button { padding: 0.3rem 0.7rem; border: none; border-radius: 4px; cursor: pointer; color: white; font-size: 0.8rem; }
         .btn-approve { background: #27ae60; }
+        .btn-approve-team { background: #226e52; }
         .btn-reject { background: #c0392b; }
+        .btn-team { background: #286f9c; }
         .flash { padding: 0.6rem 1rem; background: #d4edda; color: #155724; margin-bottom: 1rem; border-radius: 4px; }
     </style>
 </head>
@@ -77,14 +79,15 @@ unset($_SESSION['flash']);
         <table>
             <thead>
                 <tr>
-                    <th>ID</th><th>Type</th><th>Severity</th><th>Location</th>
-                    <th>Description</th><th>Photos</th><th>Reported</th><th>Status</th><th>Action</th>
+                    <th>ID</th><th>Vehicle / Driver</th><th>Type</th><th>Severity</th><th>Location</th>
+                    <th>Description</th><th>Photos</th><th>Reported</th><th>Status</th><th>Road team</th><th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($incidents as $inc): ?>
                 <tr>
                     <td>#<?= (int)$inc['id'] ?></td>
+                    <td><?= htmlspecialchars($inc['vehicle_id'] ?: 'Unassigned') ?> · <?= htmlspecialchars($inc['cargo'] ?: 'Cargo unavailable') ?><br><small><?= htmlspecialchars($inc['driver_id'] && $inc['driver_id'] !== 'DEMO-DRIVER' ? $inc['driver_id'] : 'Driver not provided') ?></small></td>
                     <td><?= htmlspecialchars($inc['type']) ?></td>
                     <td><?= htmlspecialchars($inc['severity']) ?></td>
                     <td><?= number_format((float)$inc['lat'], 4) ?>, <?= number_format((float)$inc['lon'], 4) ?></td>
@@ -98,16 +101,42 @@ unset($_SESSION['flash']);
                     <td><?= htmlspecialchars($inc['reported_at']) ?></td>
                     <td><span class="badge badge-<?= htmlspecialchars($inc['status']) ?>"><?= htmlspecialchars($inc['status']) ?></span></td>
                     <td>
+                        <?php if (!empty($inc['road_cleared_at'])): ?>
+                            Road cleared
+                        <?php elseif (!empty($inc['team_alerted_at'])): ?>
+                            Team responding
+                        <?php else: ?>
+                            —
+                        <?php endif; ?>
+                    </td>
+                    <td>
                         <?php if ($inc['status'] === 'pending'): ?>
                             <form method="POST" action="actions.php" style="display:inline">
                                 <input type="hidden" name="id" value="<?= (int)$inc['id'] ?>">
                                 <input type="hidden" name="action" value="approve">
+                                <input type="hidden" name="return_status" value="<?= htmlspecialchars($statusFilter === 'pending' ? 'approved' : $statusFilter, ENT_QUOTES, 'UTF-8') ?>">
                                 <button type="submit" class="btn-approve">Approve</button>
                             </form>
                             <form method="POST" action="actions.php" style="display:inline">
                                 <input type="hidden" name="id" value="<?= (int)$inc['id'] ?>">
                                 <input type="hidden" name="action" value="reject">
+                                <input type="hidden" name="return_status" value="<?= htmlspecialchars($statusFilter, ENT_QUOTES, 'UTF-8') ?>">
                                 <button type="submit" class="btn-reject">Reject</button>
+                            </form>
+                            <?php if (!empty($inc['vehicle_id'])): ?>
+                                <form method="POST" action="actions.php" style="display:inline">
+                                    <input type="hidden" name="id" value="<?= (int)$inc['id'] ?>">
+                                    <input type="hidden" name="action" value="approve_and_alert">
+                                    <input type="hidden" name="return_status" value="<?= htmlspecialchars($statusFilter === 'pending' ? 'approved' : $statusFilter, ENT_QUOTES, 'UTF-8') ?>">
+                                    <button type="submit" class="btn-approve-team">Approve &amp; alert team</button>
+                                </form>
+                            <?php endif; ?>
+                        <?php elseif ($inc['status'] === 'approved' && empty($inc['team_alerted_at']) && empty($inc['road_cleared_at']) && !empty($inc['vehicle_id'])): ?>
+                            <form method="POST" action="actions.php" style="display:inline">
+                                <input type="hidden" name="id" value="<?= (int)$inc['id'] ?>">
+                                <input type="hidden" name="action" value="alert_team">
+                                <input type="hidden" name="return_status" value="<?= htmlspecialchars($statusFilter, ENT_QUOTES, 'UTF-8') ?>">
+                                <button type="submit" class="btn-team">Alert road team</button>
                             </form>
                         <?php else: ?>
                             —
@@ -116,7 +145,7 @@ unset($_SESSION['flash']);
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($incidents)): ?>
-                <tr><td colspan="9" style="text-align:center; color:#888;">No incidents in this view.</td></tr>
+                <tr><td colspan="11" style="text-align:center; color:#888;">No incidents in this view.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

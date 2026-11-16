@@ -5,6 +5,8 @@ import "leaflet/dist/leaflet.css";
 import { checkApiHealth, fetchRoute, reportIncident, uploadIncidentPhoto } from "../api";
 import { getSavedLanguage, incidentTypeText, locationText, saveLanguage, t } from "../i18n";
 import { readQueuedReports, replaceQueuedReports } from "../offlineQueue";
+import { DEMO_SHIPMENTS } from "../data/regionalDemo";
+import { useMovementDemo } from "../context/MovementDemoContext";
 
 // A few known points along the corridor for quick demo reporting —
 // real GPS input would replace this in a native app, but for a web
@@ -33,6 +35,7 @@ function makeLocalId() {
 export default function DriverView() {
   const location = useLocation();
   const signedInDriverId = location.state?.driverId;
+  const { movement, refreshIncidents } = useMovementDemo();
   const [route, setRoute] = useState(null);
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const [apiAvailable, setApiAvailable] = useState(null);
@@ -43,6 +46,11 @@ export default function DriverView() {
   const [coordinates, setCoordinates] = useState(QUICK_LOCATIONS["Tenga Valley"]);
   const [language, setLanguage] = useState(getSavedLanguage);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState("SIM-101");
+  const selectedVehicle = movement.vehicleStates.find((vehicle) => vehicle.id === selectedVehicleId);
+  const selectedVehicleHasPendingReport = selectedVehicle?.incident?.status === "pending";
+  const selectedVehicleHasQueuedReport = queue.some((report) =>
+    report.vehicle_id === selectedVehicleId && !report.incidentId);
   const [form, setForm] = useState({
     location: "Tenga Valley",
     type: "landslide",
@@ -99,6 +107,7 @@ export default function DriverView() {
             ? { incident_id: report.incidentId }
             : await reportIncident(report);
           setApiAvailable(true);
+          await refreshIncidents();
           const failedPhotos = [];
           for (const photo of report.photos || []) {
             try {
@@ -132,7 +141,7 @@ export default function DriverView() {
     } finally {
       setIsSyncing(false);
     }
-  }, [isSyncing, language, persistQueue, queue, queueReady]);
+  }, [isSyncing, language, persistQueue, queue, queueReady, refreshIncidents]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -163,6 +172,9 @@ export default function DriverView() {
       type: form.type,
       severity: form.severity,
       description: form.description,
+      vehicle_id: selectedVehicleId,
+      driver_id: signedInDriverId || null,
+      vehicle_progress: movement.vehicleStates.find((vehicle) => vehicle.id === selectedVehicleId)?.progress ?? 0,
       photos,
     };
 
@@ -178,6 +190,7 @@ export default function DriverView() {
       try {
         const result = await reportIncident(report);
         setApiAvailable(true);
+        await refreshIncidents();
         const failedPhotos = [];
         for (const photo of photos) {
           try {
@@ -272,19 +285,53 @@ export default function DriverView() {
 
       <h3>{t(language, "reportIncident")}</h3>
       <form onSubmit={handleSubmitReport}>
+        <label htmlFor="report-vehicle">{t(language, "simulatedVehicle")}</label>
+        <select
+          id="report-vehicle"
+          value={selectedVehicleId}
+          onChange={(event) => {
+            const vehicleId = event.target.value;
+            setSelectedVehicleId(vehicleId);
+            const vehicle = movement.vehicleStates.find((item) => item.id === vehicleId);
+            if (vehicle?.position) {
+              setCoordinates({ lat: vehicle.position[0], lon: vehicle.position[1] });
+              setForm((current) => ({ ...current, location: "Current vehicle position" }));
+            }
+          }}
+          style={inputStyle}
+        >
+          {DEMO_SHIPMENTS.map((shipment) => {
+            const vehicle = movement.vehicleStates.find((item) => item.id === shipment.id);
+            return <option key={shipment.id} value={shipment.id}>
+              {shipment.id} · {shipment.cargo} · {vehicle?.status?.replaceAll("_", " ") || "loading"}
+            </option>;
+          })}
+        </select>
+        <p className="report-scope-note">
+          {t(language, "vehiclePauseNote")}
+          {selectedVehicleHasPendingReport || selectedVehicleHasQueuedReport
+            ? ` ${t(language, "vehicleHasOpenReport")}`
+            : ""}
+        </p>
         <label>{t(language, "location")}</label>
         <select
           value={form.location}
           onChange={(e) => {
-            const location = e.target.value;
-            setForm({ ...form, location });
-            setCoordinates((previous) => QUICK_LOCATIONS[location] || previous);
+            const selectedLocation = e.target.value;
+            setForm({ ...form, location: selectedLocation });
+            if (selectedLocation === "Current vehicle position") {
+              const vehicle = movement.vehicleStates.find((item) => item.id === selectedVehicleId);
+              if (vehicle?.position) setCoordinates({ lat: vehicle.position[0], lon: vehicle.position[1] });
+            } else {
+              setCoordinates((previous) => QUICK_LOCATIONS[selectedLocation] || previous);
+            }
           }}
           style={inputStyle}
         >
           {Object.keys(QUICK_LOCATIONS).map((loc) => (
             <option key={loc} value={loc}>{locationText(language, loc)}</option>
           ))}
+          <option value="Current vehicle position">{t(language, "currentVehiclePosition")}</option>
           <option value="Custom map point">{t(language, "customMapPoint")}</option>
         </select>
 
@@ -350,7 +397,7 @@ export default function DriverView() {
 
         <button
           type="submit"
-          disabled={!queueReady || isSyncing}
+          disabled={!queueReady || isSyncing || selectedVehicleHasPendingReport || selectedVehicleHasQueuedReport}
           style={{
             width: "100%",
             padding: "0.6rem",

@@ -22,6 +22,10 @@ const COPY = {
     estimatedTime: "Estimated time",
     riskExposure: "Risk exposure",
     reportIncident: "Report an incident",
+    simulatedVehicle: "Simulated vehicle",
+    vehiclePauseNote: "The selected vehicle pauses when this report reaches dispatch. If no decision arrives in 22 seconds, it returns to its source.",
+    vehicleHasOpenReport: "This vehicle already has an unresolved report.",
+    currentVehiclePosition: "Current vehicle position",
     location: "Location",
     pinLocation: "Pin the report location",
     tapMap: "(tap the map)",
@@ -107,6 +111,10 @@ const COPY = {
     estimatedTime: "अनुमानित समय",
     riskExposure: "जोखिम स्तर",
     reportIncident: "घटना की रिपोर्ट करें",
+    simulatedVehicle: "सिम्युलेटेड वाहन",
+    vehiclePauseNote: "यह रिपोर्ट डिस्पैच तक पहुँचने पर चुना गया वाहन रुक जाएगा। 22 सेकंड में निर्णय न मिलने पर यह अपने प्रारंभिक स्थान पर लौटेगा।",
+    vehicleHasOpenReport: "इस वाहन की एक रिपोर्ट अभी लंबित है।",
+    currentVehiclePosition: "वाहन की वर्तमान स्थिति",
     location: "स्थान",
     pinLocation: "रिपोर्ट का स्थान चुनें",
     tapMap: "(मानचित्र पर टैप करें)",
@@ -220,6 +228,7 @@ export function locationText(language, location) {
     "Sela Pass": "selaPass",
     "Dirang-Tawang stretch": "dirangTawangStretch",
     "Custom map point": "customMapPoint",
+    "Current vehicle position": "currentVehiclePosition",
   }[location];
   return key ? t(language, key) : location;
 }

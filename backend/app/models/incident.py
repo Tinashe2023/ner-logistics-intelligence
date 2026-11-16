@@ -24,6 +24,20 @@ class Incident(Base):
     status = Column(String, default="pending")      # pending, approved, rejected
     reported_at = Column(DateTime, default=datetime.utcnow)
     reviewed_at = Column(DateTime, nullable=True)
+    vehicle_id = Column(String(16), nullable=True)
+    driver_id = Column(String(64), nullable=True)
+    vehicle_progress = Column(Float, nullable=True)
+    team_alerted_at = Column(DateTime, nullable=True)
+    road_cleared_at = Column(DateTime, nullable=True)
+
+
+class DemoVehicle(Base):
+    __tablename__ = "demo_vehicles"
+
+    id = Column(String(16), primary_key=True)
+    cargo = Column(String(100), nullable=False)
+    origin = Column(String(64), nullable=False)
+    destination = Column(String(64), nullable=False)
 
 
 class IncidentSubmission(Base):

@@ -17,6 +17,7 @@ import networkx as nx
 import requests
 import time
 from collections import defaultdict, deque
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from fastapi import Request
 from pydantic import BaseModel, Field
@@ -28,7 +29,7 @@ from starlette.responses import RedirectResponse
 from app.db.database import get_db
 from app.ai import logistics_analyst
 from app.db.graph_loader import bump_risk_near, get_coords, get_edges_raw, get_graph, nearest_node
-from app.models.incident import Incident, IncidentPhoto, IncidentSubmission
+from app.models.incident import DemoVehicle, Incident, IncidentPhoto, IncidentSubmission
 from app.risk.risk_score import SegmentFeatures, explain_risk_score
 from app.routing.risk_aware_router import shortest_risk_aware_path
 from app.storage.b2 import create_download_url, delete_object, is_configured, upload_object
@@ -87,6 +88,16 @@ class IncidentCreate(BaseModel):
     type: str = Field(pattern="^(landslide|flood|road_damage|road_blockage|other)$")
     severity: str = Field(pattern="^(minor|moderate|severe)$")
     description: str | None = Field(default=None, max_length=1000)
+    vehicle_id: str | None = Field(default=None, pattern="^SIM-(101|204|318|427|536|642)$")
+    driver_id: str | None = Field(default=None, max_length=64)
+    vehicle_progress: float | None = Field(default=None, ge=0, le=1)
+
+
+def _utc_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    aware = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return aware.astimezone(timezone.utc).isoformat()
 
 
 def _resolve_location(name: str) -> str:
@@ -271,10 +282,24 @@ def report_incident(
         if existing:
             return {"status": "received", "incident_id": existing.incident_id, "duplicate": True}
 
+    if incident.vehicle_id is not None:
+        pending_for_vehicle = db.query(Incident).filter(
+            Incident.vehicle_id == incident.vehicle_id,
+            Incident.status == "pending",
+        ).first()
+        if pending_for_vehicle is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{incident.vehicle_id} already has a pending report awaiting dispatcher review",
+            )
+
     row = Incident(
         lat=incident.lat, lon=incident.lon, type=incident.type,
         severity=incident.severity, description=incident.description,
         status="pending",
+        vehicle_id=incident.vehicle_id,
+        driver_id=incident.driver_id,
+        vehicle_progress=incident.vehicle_progress,
     )
     db.add(row)
     try:
@@ -310,11 +335,24 @@ def list_incidents(status: str | None = None, db: Session = Depends(get_db)):
                 "content_type": photo.content_type,
                 "download_path": f"/api/incidents/{photo.incident_id}/photos/{photo.id}/download",
             })
+    vehicle_ids = {row.vehicle_id for row in rows if row.vehicle_id}
+    vehicles = db.query(DemoVehicle).filter(DemoVehicle.id.in_(vehicle_ids)).all() if vehicle_ids else []
+    cargo_by_vehicle = {vehicle.id: vehicle.cargo for vehicle in vehicles}
     return [
         {
             "id": r.id, "lat": r.lat, "lon": r.lon, "type": r.type,
             "severity": r.severity, "description": r.description,
-            "status": r.status, "reported_at": r.reported_at.isoformat(),
+            "status": r.status, "reported_at": _utc_iso(r.reported_at),
+            "vehicle_id": r.vehicle_id, "driver_id": r.driver_id,
+            "cargo": cargo_by_vehicle.get(r.vehicle_id),
+            "vehicle_progress": r.vehicle_progress,
+            "team_alerted_at": _utc_iso(r.team_alerted_at),
+            "road_cleared_at": _utc_iso(r.road_cleared_at),
+            "clearance_status": (
+                "cleared" if r.road_cleared_at else
+                "team_alerted" if r.team_alerted_at else
+                "not_requested"
+            ),
             "photos": photos_by_incident.get(r.id, []),
         }
         for r in rows
@@ -435,6 +473,32 @@ def approve_incident(incident_id: int, db: Session = Depends(get_db)):
     return {"status": "approved", "incident_id": row.id, "edges_affected": affected}
 
 
+@router.post("/incidents/{incident_id}/approve-and-alert-team")
+def approve_and_alert_team(incident_id: int, db: Session = Depends(get_db)):
+    """Approve a report and alert the road team without exposing an intermediate state."""
+    row = db.query(Incident).filter(Incident.id == incident_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if row.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Cannot approve an incident with status '{row.status}'")
+
+    get_graph()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    row.status = "approved"
+    row.reviewed_at = now
+    row.team_alerted_at = now
+    db.commit()
+
+    affected = bump_risk_near(row.lat, row.lon, RISK_BUMP_RADIUS_KM, RISK_BUMP_AMOUNT)
+    return {
+        "status": "team_alerted",
+        "incident_id": row.id,
+        "edges_affected": affected,
+        "team_alerted_at": _utc_iso(row.team_alerted_at),
+        "simulated_clearance_seconds": 10,
+    }
+
+
 @router.post("/incidents/{incident_id}/reject")
 def reject_incident(incident_id: int, db: Session = Depends(get_db)):
     from datetime import datetime
@@ -450,6 +514,42 @@ def reject_incident(incident_id: int, db: Session = Depends(get_db)):
     return {"status": "rejected", "incident_id": row.id}
 
 
+@router.post("/incidents/{incident_id}/alert-team")
+def alert_clearance_team(incident_id: int, db: Session = Depends(get_db)):
+    row = db.query(Incident).filter(Incident.id == incident_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if row.status != "approved":
+        raise HTTPException(status_code=409, detail="Approve the incident before alerting the road team")
+    if row.road_cleared_at is not None:
+        raise HTTPException(status_code=409, detail="The road has already been marked clear")
+    if row.team_alerted_at is None:
+        row.team_alerted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.commit()
+    return {
+        "status": "team_alerted",
+        "incident_id": row.id,
+        "team_alerted_at": _utc_iso(row.team_alerted_at),
+        "simulated_clearance_seconds": 10,
+    }
+
+
+@router.post("/incidents/{incident_id}/team-cleared")
+def complete_road_clearance(incident_id: int, db: Session = Depends(get_db)):
+    row = db.query(Incident).filter(Incident.id == incident_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if row.status != "approved" or row.team_alerted_at is None:
+        raise HTTPException(status_code=409, detail="Alert the road team for an approved incident first")
+    if row.road_cleared_at is None:
+        elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - row.team_alerted_at).total_seconds()
+        if elapsed < 10:
+            raise HTTPException(status_code=409, detail="The simulated road-clearance team is still responding")
+        row.road_cleared_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.commit()
+    return {"status": "cleared", "incident_id": row.id}
+
+
 @router.get("/vehicles")
 def get_vehicles():
     """Current vehicle positions for the command center map. Placeholder until Phase 4."""
@@ -462,7 +562,7 @@ def get_ai_status():
         "configured": logistics_analyst.is_configured(),
         "provider": logistics_analyst.configured_provider(),
         "model": logistics_analyst.configured_model(),
-        "context": "Read-only corridor graph, historical incident JSON, and field-report database",
+        "context": "Read-only corridor graph, historical incident JSON, field-report database, and demo vehicle cargo manifest",
     }
 
 

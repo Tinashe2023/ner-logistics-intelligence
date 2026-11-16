@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import AIAnalyst from "../components/AIAnalyst";
 import RiskMap from "../components/RiskMap";
 import { DEMO_SHIPMENTS, DEMO_SITUATIONS } from "../data/regionalDemo";
-import { fetchCorridorWeather, fetchIncidents, fetchRiskMap, fetchRoute } from "../api";
+import { fetchCorridorWeather, fetchRiskMap, fetchRoute } from "../api";
+import { useMovementDemo } from "../context/MovementDemoContext";
 import { getSavedLanguage, incidentStatusText, incidentTypeText, saveLanguage, t } from "../i18n";
 import "../styles/dashboard.css";
 
@@ -12,14 +13,12 @@ const DEMO_RAIN_ALERT_MM_6H = 20;
 const DEMO_RAIN_PROBABILITY_ALERT_PERCENT = 70;
 
 export default function Dashboard() {
+  const { incidents, movement } = useMovementDemo();
   const [riskMapData, setRiskMapData] = useState(null);
-  const [incidents, setIncidents] = useState([]);
   const [weather, setWeather] = useState(null);
   const [weatherError, setWeatherError] = useState(null);
-  const [simulationClock, setSimulationClock] = useState(Date.now());
   const [language, setLanguage] = useState(getSavedLanguage);
   const [routeComparison, setRouteComparison] = useState(null);
-  const [incidentsUpdatedAt, setIncidentsUpdatedAt] = useState(null);
   const [origin, setOrigin] = useState("guwahati");
   const [destination, setDestination] = useState("tawang");
   const [loading, setLoading] = useState(false);
@@ -28,11 +27,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchRiskMap().then(setRiskMapData).catch((err) => setError(err.message));
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setSimulationClock(Date.now()), 1500);
-    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -56,33 +50,6 @@ export default function Dashboard() {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    async function refreshIncidents() {
-      try {
-        const rows = await fetchIncidents();
-        if (active) {
-          setIncidents(rows);
-          setIncidentsUpdatedAt(new Date());
-        }
-      } catch {
-        // Keep the last successful list visible if the API is temporarily unavailable.
-      }
-    }
-
-    refreshIncidents();
-    const timer = window.setInterval(refreshIncidents, 10000);
-    const refreshOnFocus = () => {
-      if (document.visibilityState === "visible") refreshIncidents();
-    };
-    document.addEventListener("visibilitychange", refreshOnFocus);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refreshOnFocus);
-    };
-  }, []);
-
   const highRiskCount = useMemo(
     () => riskMapData?.hotspots?.filter((item) => item.risk_score >= 0.3).length ?? 0,
     [riskMapData],
@@ -96,7 +63,7 @@ export default function Dashboard() {
       ...riskMapData.spine.map((segment) => [segment.u_lat, segment.u_lon]),
       [riskMapData.spine.at(-1).v_lat, riskMapData.spine.at(-1).v_lon],
     ] : []);
-  const simulatedVehicle = getSimulatedVehicle(vehiclePath, simulationClock);
+  const simulatedVehicle = getSimulatedVehicle(vehiclePath, movement.simulationNow);
 
   async function handleRouteSubmit(event) {
     event.preventDefault();
@@ -127,6 +94,7 @@ export default function Dashboard() {
         <div className="header-meta">
           <div className="corridor-label"><span className="live-dot" /> Prototype environment <span className="meta-divider">|</span> {regionalMode ? "NER regional simulation" : "Guwahati–Tawang corridor demo"}</div>
           <Link className="header-link" to="/">Platform home <span aria-hidden="true">↗</span></Link>
+          <Link className="header-link" to="/movement">Movement visibility <span aria-hidden="true">↗</span></Link>
           <Link className="header-link" to="/driver">Open field reporting <span aria-hidden="true">↗</span></Link>
         </div>
       </header>
@@ -134,6 +102,8 @@ export default function Dashboard() {
       <div className="demo-notice"><span className="notice-icon">i</span><span><strong>Class demonstration</strong> · Regional links, situations, and shipment traces illustrate the intended workflow. Corridor weather is forecast-model context at four fixed points; it is not included in corridor risk scores.</span></div>
 
       {error && <div className="error-banner" role="alert">{error}</div>}
+      {movement.routesError && <div className="error-banner" role="alert">Road-route data unavailable: {movement.routesError}</div>}
+      {movement.incidentsError && <div className="error-banner" role="alert">Incident updates unavailable: {movement.incidentsError}</div>}
 
       <section className="metric-grid" aria-label={regionalMode ? "Regional demonstration summary" : "Corridor summary"}>
         <MetricCard label={regionalMode ? "States represented" : "Monitored corridor"} value={regionalMode ? "08" : "410"} unit={regionalMode ? "" : "km"} detail={regionalMode ? "Illustrative hubs · all NER states" : "Guwahati — Tawang"} icon="↗" tone="blue" />
@@ -171,10 +141,10 @@ export default function Dashboard() {
             <button type="button" className={!regionalMode ? "active" : ""} onClick={() => setRegionalMode(false)}>Guwahati–Tawang corridor</button>
           </div>
           <div className="map-frame">
-            {regionalMode || riskMapData ? <RiskMap riskMapData={riskMapData} routeComparison={routeComparison} simulatedVehicle={simulatedVehicle} regionalMode={regionalMode} simulationClock={simulationClock} /> : <div className="map-loading">Loading corridor map…</div>}
-            <div className="map-caption">{regionalMode ? <><span className="legend-line legend-base" /> Illustrative links <span className="legend-pin" /> Scenario <span className="vehicle-legend" /> Shipment trace</> : <><span className="legend-line legend-risk" /> Risk-aware route <span className="legend-line legend-base" /> Distance baseline <span className="legend-pin" /> Risk hotspot <span className="vehicle-legend" /> Demo vehicle</>}</div>
+            {regionalMode || riskMapData ? <RiskMap riskMapData={riskMapData} routeComparison={routeComparison} simulatedVehicle={simulatedVehicle} regionalMode={regionalMode} simulationClock={movement.simulationNow} incidents={incidents} movement={movement} /> : <div className="map-loading">Loading corridor map…</div>}
+            <div className="map-caption"><span className="legend-boundary" /> District boundaries {regionalMode ? <><span className="legend-line legend-risk" /> Selected road route <span className="legend-line legend-base" /> Alternatives <span className="incident-legend">!</span> Incidents <span className="vehicle-legend" /> Simulated shipment</> : <><span className="legend-line legend-risk" /> Risk-aware route <span className="legend-line legend-base" /> Distance baseline <span className="legend-pin" /> Risk hotspot <span className="incident-legend">!</span> Incident</>}</div>
           </div>
-          <div className="map-footer"><span>{regionalMode ? "Eight-state overview · schematic connectors are not road routes" : "Guwahati → Tawang corridor"}</span><span>{regionalMode ? "Synthetic demonstration layer · hubs use city-center coordinates" : <>Map data: OpenStreetMap · <span className="muted">availability is not live-verified</span></>}</span></div>
+          <div className="map-footer"><span>{regionalMode ? "Eight-state view · approved reports can reroute SIM-101" : "Guwahati → Tawang corridor"}</span><span>{regionalMode ? "Road paths: OSRM / OpenStreetMap · Districts: geoBoundaries India ADM2 · ODbL 1.0" : <>Districts: geoBoundaries India ADM2 (2021) · ODbL 1.0 · Map tiles: OpenStreetMap / CARTO</>}</span></div>
         </article>
 
         <aside className="side-stack">
@@ -195,7 +165,7 @@ export default function Dashboard() {
           </article>
 
           <article className="panel alerts-panel" lang={language === "hi" ? "hi" : "en"}>
-            <div className="panel-heading"><div><div className="eyebrow">{t(language, "demoAlertLabel")}</div><h2>{t(language, "situationAlerts")} <span className="count-pill">{alerts.length}</span></h2></div><div className="alert-heading-actions"><button type="button" className="language-toggle" aria-label={t(language, "language")} aria-pressed={language === "hi"} onClick={() => setLanguage(saveLanguage(language === "en" ? "hi" : "en"))}>{language === "en" ? "हिन्दी" : "English"}</button><span className="refresh-indicator" title={incidentsUpdatedAt ? `Reports last updated ${incidentsUpdatedAt.toLocaleTimeString()}` : "Waiting for incident data"}><span className="refresh-dot" />{t(language, "autoTenSeconds")}</span></div></div>
+            <div className="panel-heading"><div><div className="eyebrow">{t(language, "demoAlertLabel")}</div><h2>{t(language, "situationAlerts")} <span className="count-pill">{alerts.length}</span></h2></div><div className="alert-heading-actions"><button type="button" className="language-toggle" aria-label={t(language, "language")} aria-pressed={language === "hi"} onClick={() => setLanguage(saveLanguage(language === "en" ? "hi" : "en"))}>{language === "en" ? "हिन्दी" : "English"}</button><span className="refresh-indicator" title={movement.incidentsUpdatedAt ? `Reports last updated ${movement.incidentsUpdatedAt.toLocaleTimeString()}` : "Waiting for incident data"}><span className="refresh-dot" />{t(language, "autoTenSeconds")}</span></div></div>
             {alerts.length ? <div className="alert-list">{alerts.slice(0, 5).map((alert) => <div className="alert-row" key={alert.id}>
               <span className={`alert-symbol alert-${alert.level}`}>{alert.level === "high" ? "!" : "•"}</span>
               <div className="alert-copy"><strong>{alert.title}</strong><span>{alert.detail}</span></div>
@@ -204,7 +174,7 @@ export default function Dashboard() {
             <div className="reports-subheading"><span>{t(language, "recentReports")}</span><span className="count-pill">{incidents.length}</span></div>
             {sortedIncidents.length ? <div className="incident-list">{sortedIncidents.slice(0, 4).map((item) => <div className="incident-row" key={item.id}>
               <span className={`severity-mark severity-${item.severity}`} />
-              <div className="incident-copy"><strong>{incidentTypeText(language, item.type)}</strong><span>{item.description || `${Number(item.lat).toFixed(3)}, ${Number(item.lon).toFixed(3)}`}</span></div>
+              <div className="incident-copy"><strong>{incidentTypeText(language, item.type)}</strong><span>{item.vehicle_id ? `${item.vehicle_id} · ` : ""}{item.description || `${Number(item.lat).toFixed(3)}, ${Number(item.lon).toFixed(3)}`}</span></div>
               <span className={`status-chip status-${item.status}`}>{incidentStatusText(language, item.status)}</span>
             </div>)}</div> : <div className="empty-state"><span className="empty-icon">◎</span><strong>{t(language, "noReports")}</strong><span>{t(language, "reportsHelp")}</span></div>}
             <div className="panel-footnote"><span className="small-dot" /> {t(language, "pendingReviewCount", { count: pendingCount })}</div>
@@ -222,12 +192,17 @@ export default function Dashboard() {
         </article>
         <article className="panel lower-panel fleet-panel">
           <div className="panel-heading"><div><div className="eyebrow">MOVEMENT VISIBILITY</div><h2>Vehicle status</h2></div><span className="unavailable-chip">CLASS DEMO</span></div>
-          {regionalMode ? <div className="regional-shipment-list">{DEMO_SHIPMENTS.map((shipment) => <div key={shipment.id}><span className="vehicle-legend" /><strong>{shipment.id}</strong><span>{shipment.cargo}</span><em>IN TRANSIT</em></div>)}</div> : <><div className="fleet-empty"><div className="fleet-icon">⌖</div><div><strong>TRK-DEMO-01 · In transit</strong><span>Demo cargo: medical supplies · follows the selected corridor route.</span></div></div><div className="fleet-summary"><span>Route progress · demo only</span><strong>{simulatedVehicle ? `${simulatedVehicle.progress}%` : "Waiting for route data"}</strong></div></>}
+          <div className="movement-widget-status"><span className={`movement-status-dot ${movement.status === "arrived" ? "is-arrived" : ""}`} /><strong>SIM-101 · {movementStatusText(movement.status)}</strong><span>{movement.currentLocation}</span></div>
+          <div className="fleet-summary"><span>{movement.rerouteCount ? `Route changed · ${movement.selectedRoute?.properties.label}` : "Route progress · Guwahati → Itanagar"}</span><strong>{Math.round(movement.progress * 100)}%</strong></div>
+          <div className="movement-widget-stats"><span>Road ETA <strong>{movement.roadEtaMinutes == null ? "—" : formatMovementDuration(movement.roadEtaMinutes)}</strong></span><span>Demo arrival <strong>{movement.status === "arrived" ? "Complete" : movement.demoArrivalAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</strong></span></div>
+          {movement.rerouteCount > 0 && <p className="movement-widget-note">{movement.rerouteCount} reroute{movement.rerouteCount === 1 ? "" : "s"} after dispatcher approval.</p>}
+          {movement.vehicleStates.find((vehicle) => vehicle.id === "SIM-101")?.status === "waiting_approval" && <p className="movement-widget-note">Stopped · returning to Guwahati if not approved in 22 seconds.</p>}
+          <Link className="movement-widget-link" to="/movement">Open Movement Visibility <span>→</span></Link>
         </article>
         <article className="panel lower-panel next-panel">
           <div className="panel-heading"><div><div className="eyebrow">OPERATIONS QUEUE</div><h2>Next actions</h2></div><span className="panel-icon">↗</span></div>
           <div className="action-list"><Link to="/driver" className="action-row"><span className="action-number">01</span><span><strong>Submit a field report</strong><small>Share a road condition update</small></span><b>→</b></Link><a href="https://ner-logistics-intelligence-1.onrender.com/incidents.php" className="action-row"><span className="action-number">02</span><span><strong>Review pending reports</strong><small>Open dispatcher review panel</small></span><b>↗</b></a></div>
-          <p className="fine-print">Dashboard-only demo alerts; no SMS/push notifications or delivery tracking.</p>
+          <p className="fine-print">Accelerated route simulation; no live GPS, traffic, or delivery tracking.</p>
         </article>
       </section>
       <footer className="command-footer"><span>NER Logistics Intelligence · SIH 26002 class prototype</span><span>Decision support demonstration · verify conditions with local authorities</span></footer>
@@ -241,6 +216,23 @@ function MetricCard({ label, value, unit, detail, icon, tone }) {
 
 function titleCase(value) {
   return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatMovementDuration(minutes) {
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+}
+
+function movementStatusText(status) {
+  return {
+    in_transit: "In transit",
+    rerouting: "Route selected · restarting at source",
+    arrived: "Arrived in Itanagar",
+    waiting_approval: "Stopped · awaiting approval",
+    waiting_clearance: "Stopped · awaiting road clearance",
+    returning_to_source: "Returning to source",
+    returned_to_source: "Returned to source",
+  }[status] || status;
 }
 
 function buildDemoAlerts(riskMapData, incidents, weather, language) {

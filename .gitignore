@@ -26,3 +26,8 @@ php-admin/includes/local.env.php
 
 # Local SQLite database (dev only, production uses Neon)
 *.db
+.docx
+
+# Teacher submission package
+/ner-logistics-intelligence-submission/
+/ner-logistics-intelligence-submission.zip
